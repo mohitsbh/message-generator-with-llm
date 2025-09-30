@@ -102,20 +102,44 @@
       function setStatus(s) { status.textContent = s; }
       function showSpinner(v) { spinner.style.display = v ? 'inline-block' : 'none'; }
 
-      // Helper: try primary endpoint (/api/generate) then fallback to /generate for local Express
+      // Helper: call serverless endpoint (/api/generate). If running locally (localhost) and serverless fails,
+      // fall back to local Express endpoint (/generate). Always check response status and content-type before parsing.
       async function postGenerate(body) {
-        // first try serverless path
+        const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+
+        // Try serverless /api/generate first
         try {
           const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-          const ct = r.headers.get('content-type') || '';
-          if (r.ok && ct.includes('application/json')) return await r.json();
-          // if not JSON or not ok, fallthrough to local
-        } catch (e) {
-          // ignore and try local
+          const ct = (r.headers.get('content-type') || '').toLowerCase();
+          if (r.ok) {
+            if (ct.includes('application/json')) return await r.json();
+            // server returned non-JSON (likely an HTML error page)
+            const txt = await r.text();
+            throw new Error(`/api/generate returned ${r.status}: ${txt.slice(0, 200)}`);
+          }
+          // non-ok status
+          const errTxt = await r.text();
+          throw new Error(`/api/generate returned ${r.status}: ${errTxt.slice(0, 200)}`);
+        } catch (err) {
+          // If running locally, try fallback to /generate
+          if (isLocal) {
+            try {
+              const r2 = await fetch('/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+              const ct2 = (r2.headers.get('content-type') || '').toLowerCase();
+              if (r2.ok) {
+                if (ct2.includes('application/json')) return await r2.json();
+                const txt2 = await r2.text();
+                throw new Error(`/generate returned ${r2.status}: ${txt2.slice(0,200)}`);
+              }
+              const errTxt2 = await r2.text();
+              throw new Error(`/generate returned ${r2.status}: ${errTxt2.slice(0,200)}`);
+            } catch (err2) {
+              throw err2;
+            }
+          }
+          // Not local or fallback didn't help — rethrow original error
+          throw err;
         }
-        // fallback to old path used by local express server
-        const r2 = await fetch('/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-        return await r2.json();
       }
 
       gen.addEventListener('click', async () => {
