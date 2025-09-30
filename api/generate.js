@@ -60,7 +60,7 @@ async function generateMessageOpenAI(prompt) {
   return (text || '').trim();
 }
 
-module.exports = async (req, res) => {
+const handler = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
   const { prompt, useLLM, provider } = req.body || {};
   if (typeof prompt !== 'string') return res.status(400).json({ error: 'prompt string required' });
@@ -85,3 +85,8 @@ module.exports = async (req, res) => {
   const fallback = generateMessageRule(prompt);
   return res.status(200).json({ message: fallback });
 };
+
+// Export in multiple ways to support different Vercel runtimes (CommonJS and ESM/Edge)
+module.exports = handler;
+module.exports.default = handler;
+module.exports.handler = handler;
