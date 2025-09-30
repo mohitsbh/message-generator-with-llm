@@ -102,43 +102,43 @@
       function setStatus(s) { status.textContent = s; }
       function showSpinner(v) { spinner.style.display = v ? 'inline-block' : 'none'; }
 
-      // Helper: call serverless endpoint (/api/generate). If running locally (localhost) and serverless fails,
-      // fall back to local Express endpoint (/generate). Always check response status and content-type before parsing.
+      // Helper: call the correct backend endpoint.
+      // - Locally we call the Express route /generate
+      // - In Netlify production we call the function directly at /.netlify/functions/generate
+      // - As a last-ditch fallback we try /api/generate (in case a redirect exists)
       async function postGenerate(body) {
         const isLocal = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+        const prodUrl = '/.netlify/functions/generate';
+        const localUrl = '/generate';
 
-        // Try serverless /api/generate first
-        try {
-          const r = await fetch('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        const tryFetch = async (url) => {
+          const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
           const ct = (r.headers.get('content-type') || '').toLowerCase();
           if (r.ok) {
             if (ct.includes('application/json')) return await r.json();
-            // server returned non-JSON (likely an HTML error page)
             const txt = await r.text();
-            throw new Error(`/api/generate returned ${r.status}: ${txt.slice(0, 200)}`);
+            throw new Error(`${url} returned ${r.status}: ${txt.slice(0,200)}`);
           }
-          // non-ok status
           const errTxt = await r.text();
-          throw new Error(`/api/generate returned ${r.status}: ${errTxt.slice(0, 200)}`);
+          throw new Error(`${url} returned ${r.status}: ${errTxt.slice(0,200)}`);
+        };
+
+        if (isLocal) {
+          // Local dev: call the Express endpoint
+          return await tryFetch(localUrl);
+        }
+
+        // Production (Netlify): call the function path directly to avoid relying on redirects
+        try {
+          return await tryFetch(prodUrl);
         } catch (err) {
-          // If running locally, try fallback to /generate
-          if (isLocal) {
-            try {
-              const r2 = await fetch('/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-              const ct2 = (r2.headers.get('content-type') || '').toLowerCase();
-              if (r2.ok) {
-                if (ct2.includes('application/json')) return await r2.json();
-                const txt2 = await r2.text();
-                throw new Error(`/generate returned ${r2.status}: ${txt2.slice(0,200)}`);
-              }
-              const errTxt2 = await r2.text();
-              throw new Error(`/generate returned ${r2.status}: ${errTxt2.slice(0,200)}`);
-            } catch (err2) {
-              throw err2;
-            }
+          // Fallback: try /api/generate if someone configured a redirect (older setups)
+          try {
+            return await tryFetch('/api/generate');
+          } catch (err2) {
+            // Re-throw the original production error for clearer debugging
+            throw err;
           }
-          // Not local or fallback didn't help — rethrow original error
-          throw err;
         }
       }
 
