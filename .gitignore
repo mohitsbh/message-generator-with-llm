@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+/.vercel
+dist/
+npm-debug.log
+yarn-error.log
+/.DS_Store
+.idea/
+*.log.env
+node_modules
