@@ -138,10 +138,8 @@ async function handleGenerate(req, res) {
   res.json({ message: result });
 }
 
-// Mount the same handler at both /generate and /api/generate so local and deployed
-// routes behave the same and the frontend can use /api/generate.
+// Mount the handler at /generate only (keep local routing simple)
 app.post('/generate', handleGenerate);
-app.post('/api/generate', handleGenerate);
 
 app.get('/health', (req, res) => res.send('ok'));
 
