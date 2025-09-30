@@ -111,7 +111,7 @@ async function generateMessageGemini(prompt) {
   return (text || '').toString().trim();
 }
 
-app.post('/generate', async (req, res) => {
+async function handleGenerate(req, res) {
   const { prompt, useLLM, provider } = req.body;
   if (typeof prompt !== 'string') return res.status(400).json({ error: 'prompt string required' });
 
@@ -136,7 +136,12 @@ app.post('/generate', async (req, res) => {
 
   const result = generateMessageRule(prompt);
   res.json({ message: result });
-});
+}
+
+// Mount the same handler at both /generate and /api/generate so local and deployed
+// routes behave the same and the frontend can use /api/generate.
+app.post('/generate', handleGenerate);
+app.post('/api/generate', handleGenerate);
 
 app.get('/health', (req, res) => res.send('ok'));
 
